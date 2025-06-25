@@ -1,0 +1,32 @@
+# Environnements Python
+nina_env/
+venv/
+env/
+__pycache__/
+*.pyc
+
+# Fichiers temporaires
+temp_audio/
+*.wav
+*.mp3
+
+# Logs
+logs/
+*.log
+
+# Cache
+cache/
+*.cache
+
+# Modèles IA (trop volumineux)
+models/
+*.bin
+*.gguf
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/ 

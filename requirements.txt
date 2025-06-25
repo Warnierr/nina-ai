@@ -1,0 +1,37 @@
+# 🤖 Nina AI - Dépendances Python
+# Assistant IA vocal local avec Ollama
+
+# Interface utilisateur colorée
+rich==13.7.0
+
+# Monitoring système
+psutil==5.9.7
+
+# Requêtes HTTP
+requests==2.31.0
+
+# Parsing HTML
+beautifulsoup4==4.12.2
+
+# Configuration YAML
+PyYAML==6.0.1
+
+# Gestion des dates
+python-dateutil==2.8.2
+
+# Client Ollama (optionnel, API REST suffit)
+ollama==0.2.1
+
+# Développement et tests
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
+# Formatage de code
+black==23.11.0
+isort==5.12.0
+
+# Linting
+flake8==6.1.0
+
+# Documentation
+sphinx==7.2.6 

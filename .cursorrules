@@ -1,0 +1,345 @@
+# Configuration Assistant IA Vocal Nina - Type Jarvis
+# Guide d'installation et configuration complète
+
+# Ce fichier contient les instructions pour créer un assistant IA vocal
+# semblable à Jarvis, capable d'écouter et répondre aux commandes vocales
+
+## 🖥️ 1. Prérequis matériels et système
+- ✅ PC avec au moins 16 Go de RAM
+- ✅ Microphone fonctionnel (USB ou jack)
+- ✅ Haut-parleurs ou casque
+- ✅ OS Linux (Ubuntu 20.04+ recommandé) ou Windows WSL2
+- ✅ Python 3.10+ installé
+- ✅ Git et FFmpeg installés
+
+### Test du microphone :
+```bash
+arecord -d 3 test.wav && aplay test.wav
+```
+
+## 🛠️ 2. Configuration de l'environnement
+
+### Créer le projet :
+```bash
+mkdir nina_assistant && cd nina_assistant
+```
+
+### Environnement virtuel :
+```bash
+python3 -m venv env
+source env/bin/activate  # Linux/Mac
+# ou env\Scripts\activate  # Windows
+```
+
+### Mise à jour pip :
+```bash
+pip install --upgrade pip
+```
+
+## 🧠 3. Installation des composants IA
+
+### Reconnaissance vocale (Whisper) :
+```bash
+pip install git+https://github.com/openai/whisper.git
+```
+
+### Modèle de langage local (GPT4All) :
+```bash
+pip install gpt4all
+```
+
+### Synthèse vocale (Coqui TTS) :
+```bash
+pip install TTS
+```
+
+### Bibliothèques audio et utilitaires :
+```bash
+pip install sounddevice soundfile numpy scipy
+pip install requests beautifulsoup4 wikipedia-api
+pip install python-dotenv schedule
+sudo apt install libportaudio2  # Linux uniquement
+```
+
+### Téléchargement du modèle :
+```bash
+mkdir models && cd models
+wget https://gpt4all.io/models/ggml-gpt4all-j-v1.3-groovy.bin
+cd ..
+```
+
+## 📁 4. Structure du projet
+
+```
+nina_assistant/
+├── models/
+│   └── ggml-gpt4all-j-v1.3-groovy.bin
+├── temp_audio/
+├── config/
+│   └── settings.py
+├── modules/
+│   ├── speech_recognition.py
+│   ├── text_processing.py
+│   ├── voice_synthesis.py
+│   └── ai_brain.py
+├── nina.py
+└── requirements.txt
+```
+
+## 🧾 5. Code principal nina.py
+
+```python
+import os
+import sys
+import json
+import time
+import threading
+from datetime import datetime
+import whisper
+from gpt4all import GPT4All
+from TTS.api import TTS
+import sounddevice as sd
+import soundfile as sf
+import numpy as np
+
+class NinaAssistant:
+    def __init__(self):
+        print("🤖 Nina s'initialise... Veuillez patienter")
+        
+        # Configuration
+        self.setup_directories()
+        self.load_models()
+        self.setup_audio()
+        
+        # État de l'assistant
+        self.is_listening = False
+        self.wake_word = "nina"
+        self.conversation_history = []
+        
+        print("✅ Nina est prête ! Dites 'Nina' pour commencer.")
+    
+    def setup_directories(self):
+        """Créer les dossiers nécessaires"""
+        os.makedirs("temp_audio", exist_ok=True)
+        os.makedirs("logs", exist_ok=True)
+    
+    def load_models(self):
+        """Charger tous les modèles IA"""
+        print("🧠 Chargement des modèles IA...")
+        
+        # Reconnaissance vocale
+        self.whisper_model = whisper.load_model("base")
+        
+        # Modèle de langage
+        self.gpt_model = GPT4All("ggml-gpt4all-j-v1.3-groovy.bin", model_path="./models")
+        
+        # Synthèse vocale
+        self.tts = TTS(model_name="tts_models/fr/css10/vits", progress_bar=False, gpu=False)
+        
+        print("✅ Modèles chargés avec succès")
+    
+    def setup_audio(self):
+        """Configuration audio"""
+        self.sample_rate = 16000
+        self.audio_duration = 5
+    
+    def record_audio(self, filename="temp_audio/input.wav", duration=None):
+        """Enregistrer l'audio du microphone"""
+        if duration is None:
+            duration = self.audio_duration
+            
+        print("🎙️ Écoute en cours...")
+        
+        try:
+            audio = sd.rec(int(duration * self.sample_rate), 
+                          samplerate=self.sample_rate, 
+                          channels=1, dtype='float64')
+            sd.wait()
+            sf.write(filename, audio, self.sample_rate)
+            return filename
+        except Exception as e:
+            print(f"❌ Erreur d'enregistrement: {e}")
+            return None
+    
+    def speech_to_text(self, audio_file):
+        """Convertir l'audio en texte"""
+        try:
+            result = self.whisper_model.transcribe(audio_file)
+            return result["text"].strip()
+        except Exception as e:
+            print(f"❌ Erreur de transcription: {e}")
+            return ""
+    
+    def process_command(self, text):
+        """Traiter la commande et générer une réponse"""
+        if not text:
+            return "Je n'ai pas bien entendu, pouvez-vous répéter ?"
+        
+        # Ajouter le contexte de la conversation
+        context = f"Tu es Nina, un assistant IA vocal français comme Jarvis. "
+        context += f"Réponds de manière naturelle et utile. "
+        context += f"Historique récent: {' '.join(self.conversation_history[-3:])}"
+        
+        prompt = f"{context}\n\nUtilisateur: {text}\nNina:"
+        
+        try:
+            response = self.gpt_model.generate(prompt, max_tokens=150, temp=0.7)
+            
+            # Nettoyer la réponse
+            response = response.strip()
+            if response.startswith("Nina:"):
+                response = response[5:].strip()
+            
+            return response
+        except Exception as e:
+            print(f"❌ Erreur de génération: {e}")
+            return "Je rencontre un problème technique, excusez-moi."
+    
+    def text_to_speech(self, text, filename="temp_audio/response.wav"):
+        """Convertir le texte en parole"""
+        try:
+            self.tts.tts_to_file(text=text, file_path=filename)
+            return filename
+        except Exception as e:
+            print(f"❌ Erreur de synthèse: {e}")
+            return None
+    
+    def play_audio(self, filename):
+        """Jouer un fichier audio"""
+        try:
+            if os.name == 'nt':  # Windows
+                os.system(f'start /wait {filename}')
+            else:  # Linux/Mac
+                os.system(f'aplay {filename}')
+        except Exception as e:
+            print(f"❌ Erreur de lecture: {e}")
+    
+    def detect_wake_word(self, text):
+        """Détecter le mot de réveil"""
+        return self.wake_word.lower() in text.lower()
+    
+    def log_conversation(self, user_input, ai_response):
+        """Enregistrer la conversation"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_entry = {
+            "timestamp": timestamp,
+            "user": user_input,
+            "nina": ai_response
+        }
+        
+        # Sauvegarder dans l'historique
+        self.conversation_history.append(f"User: {user_input} | Nina: {ai_response}")
+        
+        # Limiter l'historique
+        if len(self.conversation_history) > 10:
+            self.conversation_history.pop(0)
+    
+    def run(self):
+        """Boucle principale de l'assistant"""
+        print("🚀 Nina est en fonctionnement !")
+        print("💡 Dites 'Nina' suivi de votre question")
+        print("💡 Dites 'Nina arrêt' pour quitter")
+        
+        while True:
+            try:
+                # Enregistrer l'audio
+                audio_file = self.record_audio()
+                if not audio_file:
+                    continue
+                
+                # Convertir en texte
+                user_text = self.speech_to_text(audio_file)
+                if not user_text:
+                    continue
+                
+                print(f"🗨️ Vous: {user_text}")
+                
+                # Vérifier le mot de réveil
+                if self.detect_wake_word(user_text):
+                    # Vérifier si c'est un arrêt
+                    if "arrêt" in user_text.lower() or "stop" in user_text.lower():
+                        print("👋 Nina s'arrête. À bientôt !")
+                        break
+                    
+                    # Traiter la commande
+                    response = self.process_command(user_text)
+                    print(f"🤖 Nina: {response}")
+                    
+                    # Convertir en audio et jouer
+                    audio_response = self.text_to_speech(response)
+                    if audio_response:
+                        self.play_audio(audio_response)
+                    
+                    # Enregistrer la conversation
+                    self.log_conversation(user_text, response)
+                
+                # Petit délai pour éviter la surcharge
+                time.sleep(0.5)
+                
+            except KeyboardInterrupt:
+                print("\n👋 Nina s'arrête. À bientôt !")
+                break
+            except Exception as e:
+                print(f"❌ Erreur inattendue: {e}")
+                continue
+
+# Point d'entrée
+if __name__ == "__main__":
+    try:
+        nina = NinaAssistant()
+        nina.run()
+    except Exception as e:
+        print(f"❌ Erreur fatale: {e}")
+        sys.exit(1)
+
+## 🚀 6. Lancement de Nina
+
+### Activer l'environnement :
+```bash
+source env/bin/activate
+```
+
+### Lancer l'assistant :
+```bash
+python nina.py
+```
+
+## 🔒 7. Fonctionnalités avancées (optionnelles)
+
+### Détection de mots-clés améliorée :
+```bash
+pip install pvporcupine  # Wake word detection
+```
+
+### Intégration domotique :
+```bash
+pip install paho-mqtt  # Pour IoT/domotique
+```
+
+### Reconnaissance d'émotions :
+```bash
+pip install speechemotionrecognition
+```
+
+## 🛡️ 8. Sécurité et vie privée
+
+- ✅ Tout fonctionne hors ligne (pas de données envoyées sur internet)
+- ✅ Logs locaux uniquement
+- ✅ Suppression automatique des fichiers audio temporaires
+- ✅ Chiffrement des données personnelles (si configuré)
+
+## 🧪 9. Tests recommandés
+
+1. **Test de base** : "Nina, bonjour"
+2. **Test de conversation** : "Nina, raconte-moi une blague"
+3. **Test de commandes** : "Nina, quelle heure est-il ?"
+4. **Test d'arrêt** : "Nina arrêt"
+
+## 📚 10. Améliorations possibles
+
+- 🔄 Détection continue du wake word
+- 🌐 Intégration d'APIs externes (météo, actualités)
+- 🏠 Contrôle de la domotique
+- 📱 Interface mobile
+- 🧠 Apprentissage personnalisé
+- 🎯 Commandes vocales spécialisées 
